@@ -4,9 +4,9 @@ const { MongoClient } = require('mongodb');
 const userStates = new Map();
 
 export default async function handler(req, res) {
-  // DEBUG: Log the request
-  console.log('📨 Telegram webhook called');
+  console.log('📨 Telegram webhook called at:', new Date().toISOString());
   
+  // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -23,84 +23,108 @@ export default async function handler(req, res) {
   
   try {
     const update = req.body;
-    console.log('📝 Update received:', JSON.stringify(update).substring(0, 200));
     
-    // Send immediate response to Telegram (IMPORTANT!)
+    // Send IMMEDIATE response to Telegram (CRITICAL!)
     res.status(200).json({ ok: true });
     
-    // Process in background
-    setTimeout(async () => {
-      try {
-        await handleTelegramUpdate(update);
-      } catch (error) {
-        console.error('❌ Error in background processing:', error);
-      }
-    }, 0);
-    
-  } catch (error) {
-    console.error('❌ Main handler error:', error);
-    // Still return 200 to Telegram
-    res.status(200).json({ ok: true });
-  }
-}
-
-// Connect to MongoDB
-async function connectDB() {
-  try {
-    const uri = process.env.MONGODB_URI;
-    console.log('🔗 Connecting to MongoDB...');
-    
-    if (!uri) {
-      throw new Error('❌ MONGODB_URI not set');
-    }
-    
-    const client = new MongoClient(uri);
-    await client.connect();
-    console.log('✅ MongoDB connected');
-    return client.db('dramawallah');
-  } catch (error) {
-    console.error('❌ MongoDB connection failed:', error.message);
-    throw error;
-  }
-}
-
-// Send message to Telegram
-async function sendTelegramMessage(chatId, text, options = {}) {
-  try {
-    const token = process.env.TELEGRAM_TOKEN;
-    
-    if (!token) {
-      console.error('❌ TELEGRAM_TOKEN not set');
-      return;
-    }
-    
-    const url = `https://api.telegram.org/bot${token}/sendMessage`;
-    console.log(`📤 Sending message to ${chatId}: ${text.substring(0, 50)}...`);
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: text,
-        parse_mode: 'Markdown',
-        ...options
-      })
+    // Process in background (async)
+    processUpdateAsync(update).catch(error => {
+      console.error('❌ Background processing error:', error.message);
     });
     
-    const result = await response.json();
-    console.log('📨 Telegram API response:', result.ok ? '✅ Success' : '❌ Failed');
-    return result;
-    
   } catch (error) {
-    console.error('❌ Error sending Telegram message:', error.message);
+    console.error('❌ Handler error:', error);
+    // Still return 200 to prevent Telegram retries
+    res.status(200).json({ ok: true });
   }
+}
+
+// Process update in background (doesn't block response)
+async function processUpdateAsync(update) {
+  try {
+    console.log('🔄 Processing update in background...');
+    await handleTelegramUpdate(update);
+  } catch (error) {
+    console.error('❌ Update processing failed:', error.message);
+  }
+}
+
+// Connect to MongoDB with timeout
+async function connectDB() {
+  const uri = process.env.MONGODB_URI;
+  console.log('🔗 Connecting to MongoDB...');
+  
+  if (!uri) {
+    throw new Error('❌ MONGODB_URI not set');
+  }
+  
+  // Add timeout to prevent hanging
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('MongoDB connection timeout')), 5000);
+  });
+  
+  const client = new MongoClient(uri);
+  
+  // Race between connection and timeout
+  await Promise.race([
+    client.connect(),
+    timeoutPromise
+  ]);
+  
+  console.log('✅ MongoDB connected');
+  return client.db('dramawallah');
+}
+
+// Send message to Telegram with retry
+async function sendTelegramMessage(chatId, text, options = {}) {
+  const token = process.env.TELEGRAM_TOKEN;
+  
+  if (!token) {
+    console.error('❌ TELEGRAM_TOKEN not set');
+    return;
+  }
+  
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  const payload = {
+    chat_id: chatId,
+    text: text,
+    parse_mode: 'Markdown',
+    ...options
+  };
+  
+  // Retry logic
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      console.log(`📤 Sending message to ${chatId} (attempt ${attempt})`);
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (response.ok) {
+        console.log('✅ Message sent successfully');
+        return await response.json();
+      }
+      
+      console.log(`⚠️ Attempt ${attempt} failed: ${response.status}`);
+      
+    } catch (error) {
+      console.error(`❌ Attempt ${attempt} error:`, error.message);
+    }
+    
+    // Wait before retry (except on last attempt)
+    if (attempt < 3) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  
+  console.error('❌ Failed to send message after 3 attempts');
 }
 
 // Handle Telegram updates
 async function handleTelegramUpdate(update) {
-  console.log('🔄 Processing update...');
-  
   if (!update.message) {
     console.log('📭 No message in update');
     return;
@@ -126,46 +150,26 @@ async function handleTelegramUpdate(update) {
     return;
   }
   
-  // Handle photo message (accept image URLs for now)
-  if (update.message.photo) {
-    console.log('📸 Photo received');
-    const state = userStates.get(chatId);
-    if (state && state.step === 'awaiting_image') {
-      // For now, ask for image URL instead of uploading
-      await sendTelegramMessage(chatId,
-        '📸 I received your photo! *For now, please send me an image URL instead.*\n\n' +
-        'You can get image URLs from:\n' +
-        '• https://unsplash.com\n' +
-        '• https://imgur.com\n' +
-        '• Any direct image link'
-      );
-      return;
-    }
-  }
-  
-  // Handle commands
+  // Handle commands with immediate response
   if (text.startsWith('/start')) {
-    console.log('🚀 /start command');
     await sendWelcomeMessage(chatId);
     
   } else if (text.startsWith('/addpost')) {
-    console.log('➕ /addpost command');
     await startAddPost(chatId);
     
   } else if (text.startsWith('/help')) {
-    console.log('❓ /help command');
     await sendHelp(chatId);
     
   } else if (text.startsWith('/list')) {
-    console.log('📋 /list command');
     await listPosts(chatId);
     
+  } else if (text.startsWith('/clear')) {
+    await clearPosts(chatId);
+    
   } else if (text.startsWith('/test')) {
-    console.log('🧪 /test command');
-    await sendTelegramMessage(chatId, '✅ Bot is working!');
+    await sendTelegramMessage(chatId, '✅ Bot is working! Response time optimized.');
     
   } else {
-    // Handle post creation flow
     await handlePostCreation(chatId, text);
   }
 }
@@ -174,7 +178,8 @@ async function handleTelegramUpdate(update) {
 async function startAddPost(chatId) {
   userStates.set(chatId, {
     step: 'awaiting_title',
-    data: {}
+    data: {},
+    timestamp: Date.now()
   });
   
   console.log(`📝 Started post creation for ${chatId}`);
@@ -193,31 +198,41 @@ async function handlePostCreation(chatId, text) {
     return;
   }
   
+  // Clean old states (older than 10 minutes)
+  if (Date.now() - state.timestamp > 10 * 60 * 1000) {
+    userStates.delete(chatId);
+    await sendTelegramMessage(chatId, '⏱️ Session expired. Please start over with /addpost');
+    return;
+  }
+  
   console.log(`📝 Step ${state.step}: "${text.substring(0, 50)}"`);
   
   switch (state.step) {
     case 'awaiting_title':
       state.data.title = text;
       state.step = 'awaiting_image';
+      state.timestamp = Date.now();
       await sendTelegramMessage(chatId,
         '✅ *Title saved!*\n\n' +
         'Step 2/4: Send me the **Image URL**:\n' +
         '(e.g., https://images.unsplash.com/photo-...)\n\n' +
-        '*Note:* Direct photo upload coming soon!'
+        '*Tip:* Use direct image links from Unsplash or Imgur'
       );
       break;
       
     case 'awaiting_image':
-      // Simple URL validation
+      // Basic URL validation
       if (!text.startsWith('http')) {
         await sendTelegramMessage(chatId,
-          '❌ Please send a valid image URL starting with http:// or https://'
+          '❌ Please send a valid image URL starting with http:// or https://\n' +
+          'Example: https://images.unsplash.com/photo-1542856391-010b89d4baf4'
         );
         return;
       }
       
       state.data.image = text;
       state.step = 'awaiting_description';
+      state.timestamp = Date.now();
       await sendTelegramMessage(chatId,
         '✅ *Image URL saved!*\n\n' +
         'Step 3/4: Send me the **Description**:'
@@ -227,17 +242,20 @@ async function handlePostCreation(chatId, text) {
     case 'awaiting_description':
       state.data.description = text;
       state.step = 'awaiting_link';
+      state.timestamp = Date.now();
       await sendTelegramMessage(chatId,
         '✅ *Description saved!*\n\n' +
         'Step 4/4: Send me the **Redirect Link**:\n' +
-        '(Users will click on title to visit this link)'
+        '(Users will click on title to visit this link)\n\n' +
+        '*Important:* This should be a webpage URL, not an image URL!'
       );
       break;
       
     case 'awaiting_link':
       if (!text.startsWith('http')) {
         await sendTelegramMessage(chatId,
-          '❌ Please send a valid URL starting with http:// or https://'
+          '❌ Please send a valid URL starting with http:// or https://\n' +
+          'Example: https://dramawallah.vercel.app'
         );
         return;
       }
@@ -257,7 +275,7 @@ async function handlePostCreation(chatId, text) {
   }
 }
 
-// Save post to database
+// Save post to database with timeout
 async function savePostToDatabase(postData, chatId) {
   try {
     const db = await connectDB();
@@ -281,30 +299,41 @@ async function savePostToDatabase(postData, chatId) {
     await sendTelegramMessage(chatId,
       `🎉 *POST CREATED SUCCESSFULLY!*\n\n` +
       `*Title:* ${post.title}\n` +
+      `*Description:* ${post.description.substring(0, 50)}...\n` +
       `*Link:* ${post.link}\n` +
       `*Category:* ${post.category}\n\n` +
       `✅ Post is now live on your website!\n` +
-      `🔗 https://dramawallah.vercel.app`
+      `🔗 https://dramawallah.vercel.app\n\n` +
+      `*Next:* Check your website to see it appear instantly!`
     );
     
   } catch (error) {
-    console.error('❌ Database error:', error);
+    console.error('❌ Database error:', error.message);
     await sendTelegramMessage(chatId,
       '❌ *Error saving post!*\n\n' +
-      'Please check:\n' +
-      '1. MongoDB connection\n' +
-      '2. Environment variables\n' +
-      '3. Try again later'
+      'The post was not saved. Please try again.\n' +
+      'Error: ' + error.message
     );
   }
 }
 
-// List all posts
+// List posts with timeout protection
 async function listPosts(chatId) {
   try {
+    console.log('📊 Fetching posts from MongoDB...');
+    
+    // Add timeout for database query
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Database query timeout')), 3000);
+    });
+    
     const db = await connectDB();
     const posts = db.collection('posts');
-    const allPosts = await posts.find({}).sort({ createdAt: -1 }).toArray();
+    
+    const queryPromise = posts.find({}).sort({ createdAt: -1 }).toArray();
+    const allPosts = await Promise.race([queryPromise, timeoutPromise]);
+    
+    console.log(`✅ Found ${allPosts.length} posts`);
     
     if (allPosts.length === 0) {
       await sendTelegramMessage(chatId, '📭 *No posts found.*\n\nAdd your first post with /addpost');
@@ -316,30 +345,55 @@ async function listPosts(chatId) {
     allPosts.forEach((post, index) => {
       const date = new Date(post.createdAt).toLocaleDateString();
       message += `${index + 1}. *${post.title}*\n`;
-      message += `   📅 ${date} | 📂 ${post.category}\n`;
-      message += `   🔗 ${post.link}\n\n`;
+      message += `   📅 ${date} | 📂 ${post.category || 'news'}\n`;
+      message += `   🔗 ${post.link}\n`;
+      message += `   📝 ${post.description ? post.description.substring(0, 50) + '...' : 'No description'}\n\n`;
     });
     
     await sendTelegramMessage(chatId, message);
     
   } catch (error) {
-    console.error('❌ Error listing posts:', error);
-    await sendTelegramMessage(chatId, '❌ Error fetching posts from database.');
+    console.error('❌ Error listing posts:', error.message);
+    await sendTelegramMessage(chatId,
+      '⚠️ *Could not fetch posts*\n\n' +
+      'The posts are saved but listing failed.\n' +
+      'Check your website to see all posts.\n\n' +
+      'Error: ' + error.message
+    );
+  }
+}
+
+// Clear all posts
+async function clearPosts(chatId) {
+  try {
+    const db = await connectDB();
+    const posts = db.collection('posts');
+    const result = await posts.deleteMany({});
+    
+    await sendTelegramMessage(chatId,
+      `🗑️ *Cleared ${result.deletedCount} posts*\n\n` +
+      `All posts have been removed from the website.`
+    );
+    
+  } catch (error) {
+    console.error('❌ Error clearing posts:', error);
+    await sendTelegramMessage(chatId, '❌ Error clearing posts.');
   }
 }
 
 // Welcome message
 async function sendWelcomeMessage(chatId) {
   const welcome = `
-🤖 *WELCOME TO DRAMABOT!*
+🤖 *WELCOME TO DRAMABOT!* 🚀
 
-*I can help you manage your Dramawallah website.*
+*I can help you manage your Dramawallah website instantly!*
 
 ✅ *Commands:*
-/addpost - Create new post
-/list - Show all posts
+/addpost - Create new post (4 simple steps)
+/list - Show all posts (fast response)
 /help - Show help
-/test - Test bot connection
+/clear - Remove all posts
+/test - Test bot speed
 
 ✅ *How to add a post:*
 1. Send /addpost
@@ -350,7 +404,7 @@ async function sendWelcomeMessage(chatId) {
 
 ✅ *Website:* https://dramawallah.vercel.app
 
-*Bot is connected and ready!* 🚀
+*Bot is optimized for speed!* ⚡
   `;
   
   await sendTelegramMessage(chatId, welcome);
@@ -359,29 +413,32 @@ async function sendWelcomeMessage(chatId) {
 // Help message
 async function sendHelp(chatId) {
   const help = `
-📚 *DRAMABOT HELP*
+📚 *DRAMABOT HELP - OPTIMIZED* ⚡
 
 *Getting Started:*
 1. Use /addpost to create content
 2. Follow the step-by-step prompts
 3. Posts appear instantly on website
 
-*Image URLs:*
-• https://images.unsplash.com/...
+*Image URLs (direct links only):*
+• https://images.unsplash.com/photo-...
 • https://i.imgur.com/...
-• Any direct image link
+• https://picsum.photos/...
+
+*Redirect Links (webpage URLs):*
+• https://dramawallah.vercel.app
+• https://your-blog.com/article
+• Any valid webpage URL
 
 *Example Workflow:*
 1. /addpost
 2. "Winter Wardrobe Secrets"
-3. "https://images.unsplash.com/photo-..."
+3. "https://images.unsplash.com/photo-1542856391-010b89d4baf4"
 4. "Behind the scenes of winter costumes"
-5. "https://yourblog.com/article"
+5. "https://dramawallah.vercel.app/winter-wardrobe"
 
-*Need Help?*
-Check Vercel logs or contact support.
-
-*Bot Status:* ✅ Online
+*Bot Status:* ✅ Online & Optimized
+*Response Time:* ⚡ Fast
   `;
   
   await sendTelegramMessage(chatId, help);
