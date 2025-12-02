@@ -1,103 +1,172 @@
-
 const { MongoClient } = require('mongodb');
-const cloudinary = require('cloudinary').v2;
-
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
 
 // User states for post creation
 const userStates = new Map();
 
 export default async function handler(req, res) {
+  // DEBUG: Log the request
+  console.log('📨 Telegram webhook called');
+  
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
   if (req.method === 'OPTIONS') {
+    console.log('🔄 Preflight request');
     return res.status(200).end();
   }
   
   if (req.method !== 'POST') {
+    console.log('❌ Wrong method:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
   }
   
   try {
     const update = req.body;
-    await handleTelegramUpdate(update);
+    console.log('📝 Update received:', JSON.stringify(update).substring(0, 200));
+    
+    // Send immediate response to Telegram (IMPORTANT!)
     res.status(200).json({ ok: true });
+    
+    // Process in background
+    setTimeout(async () => {
+      try {
+        await handleTelegramUpdate(update);
+      } catch (error) {
+        console.error('❌ Error in background processing:', error);
+      }
+    }, 0);
+    
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('❌ Main handler error:', error);
+    // Still return 200 to Telegram
+    res.status(200).json({ ok: true });
   }
 }
 
 // Connect to MongoDB
 async function connectDB() {
-  const uri = process.env.MONGODB_URI;
-  const client = new MongoClient(uri);
-  await client.connect();
-  return client.db('dramawallah');
+  try {
+    const uri = process.env.MONGODB_URI;
+    console.log('🔗 Connecting to MongoDB...');
+    
+    if (!uri) {
+      throw new Error('❌ MONGODB_URI not set');
+    }
+    
+    const client = new MongoClient(uri);
+    await client.connect();
+    console.log('✅ MongoDB connected');
+    return client.db('dramawallah');
+  } catch (error) {
+    console.error('❌ MongoDB connection failed:', error.message);
+    throw error;
+  }
 }
 
 // Send message to Telegram
 async function sendTelegramMessage(chatId, text, options = {}) {
-  const token = process.env.TELEGRAM_TOKEN;
-  const url = `https://api.telegram.org/bot${token}/sendMessage`;
-  
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: text,
-      parse_mode: 'Markdown',
-      ...options
-    })
-  });
-  
-  return response.json();
+  try {
+    const token = process.env.TELEGRAM_TOKEN;
+    
+    if (!token) {
+      console.error('❌ TELEGRAM_TOKEN not set');
+      return;
+    }
+    
+    const url = `https://api.telegram.org/bot${token}/sendMessage`;
+    console.log(`📤 Sending message to ${chatId}: ${text.substring(0, 50)}...`);
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: text,
+        parse_mode: 'Markdown',
+        ...options
+      })
+    });
+    
+    const result = await response.json();
+    console.log('📨 Telegram API response:', result.ok ? '✅ Success' : '❌ Failed');
+    return result;
+    
+  } catch (error) {
+    console.error('❌ Error sending Telegram message:', error.message);
+  }
 }
 
 // Handle Telegram updates
 async function handleTelegramUpdate(update) {
-  // Handle photo message
-  if (update.message && update.message.photo) {
-    const chatId = update.message.chat.id;
-    const state = userStates.get(chatId);
-    
-    if (state && state.step === 'awaiting_image') {
-      await handlePhotoUpload(chatId, update.message.photo, state);
-      return;
-    }
-  }
+  console.log('🔄 Processing update...');
   
-  if (!update.message) return;
+  if (!update.message) {
+    console.log('📭 No message in update');
+    return;
+  }
   
   const chatId = update.message.chat.id;
   const text = update.message.text || '';
   const userId = update.message.from.id;
   
-  // Check admin
-  if (userId.toString() !== process.env.ADMIN_CHAT_ID) {
-    await sendTelegramMessage(chatId, '❌ You are not authorized.');
+  console.log(`👤 User ${userId}: "${text.substring(0, 50)}"`);
+  
+  // Check if user is admin
+  const adminId = process.env.ADMIN_CHAT_ID;
+  if (!adminId) {
+    console.error('❌ ADMIN_CHAT_ID not set');
+    await sendTelegramMessage(chatId, '❌ Bot configuration error.');
     return;
+  }
+  
+  if (userId.toString() !== adminId.toString()) {
+    console.log(`🚫 Unauthorized user: ${userId}`);
+    await sendTelegramMessage(chatId, '❌ You are not authorized to use this bot.');
+    return;
+  }
+  
+  // Handle photo message (accept image URLs for now)
+  if (update.message.photo) {
+    console.log('📸 Photo received');
+    const state = userStates.get(chatId);
+    if (state && state.step === 'awaiting_image') {
+      // For now, ask for image URL instead of uploading
+      await sendTelegramMessage(chatId,
+        '📸 I received your photo! *For now, please send me an image URL instead.*\n\n' +
+        'You can get image URLs from:\n' +
+        '• https://unsplash.com\n' +
+        '• https://imgur.com\n' +
+        '• Any direct image link'
+      );
+      return;
+    }
   }
   
   // Handle commands
   if (text.startsWith('/start')) {
-    await sendWelcome(chatId);
+    console.log('🚀 /start command');
+    await sendWelcomeMessage(chatId);
+    
   } else if (text.startsWith('/addpost')) {
+    console.log('➕ /addpost command');
     await startAddPost(chatId);
+    
   } else if (text.startsWith('/help')) {
+    console.log('❓ /help command');
     await sendHelp(chatId);
+    
   } else if (text.startsWith('/list')) {
+    console.log('📋 /list command');
     await listPosts(chatId);
+    
+  } else if (text.startsWith('/test')) {
+    console.log('🧪 /test command');
+    await sendTelegramMessage(chatId, '✅ Bot is working!');
+    
   } else {
-    await handleTextInput(chatId, text);
+    // Handle post creation flow
+    await handlePostCreation(chatId, text);
   }
 }
 
@@ -108,25 +177,50 @@ async function startAddPost(chatId) {
     data: {}
   });
   
+  console.log(`📝 Started post creation for ${chatId}`);
+  
   await sendTelegramMessage(chatId,
-    '📝 *Create New Post*\n\n' +
-    'Step 1/3: Send me the **Post Title**:'
+    '📝 *CREATE NEW POST*\n\n' +
+    'Step 1/4: Send me the **Post Title**:'
   );
 }
 
-// Handle text inputs
-async function handleTextInput(chatId, text) {
+// Handle post creation steps
+async function handlePostCreation(chatId, text) {
   const state = userStates.get(chatId);
-  if (!state) return;
+  if (!state) {
+    console.log(`ℹ️ No active state for ${chatId}`);
+    return;
+  }
+  
+  console.log(`📝 Step ${state.step}: "${text.substring(0, 50)}"`);
   
   switch (state.step) {
     case 'awaiting_title':
       state.data.title = text;
       state.step = 'awaiting_image';
       await sendTelegramMessage(chatId,
-        '✅ Title saved!\n\n' +
-        'Step 2/3: Now **send me a photo** for this post:\n' +
-        '(Upload any image directly to Telegram)'
+        '✅ *Title saved!*\n\n' +
+        'Step 2/4: Send me the **Image URL**:\n' +
+        '(e.g., https://images.unsplash.com/photo-...)\n\n' +
+        '*Note:* Direct photo upload coming soon!'
+      );
+      break;
+      
+    case 'awaiting_image':
+      // Simple URL validation
+      if (!text.startsWith('http')) {
+        await sendTelegramMessage(chatId,
+          '❌ Please send a valid image URL starting with http:// or https://'
+        );
+        return;
+      }
+      
+      state.data.image = text;
+      state.step = 'awaiting_description';
+      await sendTelegramMessage(chatId,
+        '✅ *Image URL saved!*\n\n' +
+        'Step 3/4: Send me the **Description**:'
       );
       break;
       
@@ -134,64 +228,32 @@ async function handleTextInput(chatId, text) {
       state.data.description = text;
       state.step = 'awaiting_link';
       await sendTelegramMessage(chatId,
-        '✅ Description saved!\n\n' +
-        'Step 3/3: Send me the **Redirect Link**:\n' +
-        '(Where users go when they click the title)'
+        '✅ *Description saved!*\n\n' +
+        'Step 4/4: Send me the **Redirect Link**:\n' +
+        '(Users will click on title to visit this link)'
       );
       break;
       
     case 'awaiting_link':
+      if (!text.startsWith('http')) {
+        await sendTelegramMessage(chatId,
+          '❌ Please send a valid URL starting with http:// or https://'
+        );
+        return;
+      }
+      
       state.data.link = text;
       state.data.category = 'news';
       state.data.createdAt = new Date().toISOString();
       
+      console.log('💾 Saving post to database...');
       await savePostToDatabase(state.data, chatId);
       userStates.delete(chatId);
       break;
-  }
-}
-
-// Handle photo upload
-async function handlePhotoUpload(chatId, photos, state) {
-  try {
-    // Get the largest photo (last in array)
-    const largestPhoto = photos[photos.length - 1];
-    const fileId = largestPhoto.file_id;
-    
-    await sendTelegramMessage(chatId, '📸 Photo received! Processing...');
-    
-    // Get file path from Telegram
-    const token = process.env.TELEGRAM_TOKEN;
-    const fileUrl = `https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`;
-    const fileResponse = await fetch(fileUrl);
-    const fileData = await fileResponse.json();
-    
-    if (!fileData.ok) throw new Error('Failed to get file');
-    
-    const filePath = fileData.result.file_path;
-    const telegramFileUrl = `https://api.telegram.org/file/bot${token}/${filePath}`;
-    
-    // Upload to Cloudinary
-    const uploadResult = await cloudinary.uploader.upload(telegramFileUrl, {
-      folder: 'dramawallah',
-      transformation: [
-        { width: 1000, height: 600, crop: 'fill' },
-        { quality: 'auto:good' }
-      ]
-    });
-    
-    state.data.image = uploadResult.secure_url;
-    state.step = 'awaiting_description';
-    
-    await sendTelegramMessage(chatId,
-      '✅ Image uploaded successfully!\n\n' +
-      'Now send me the **Description** for this post:'
-    );
-    
-  } catch (error) {
-    console.error('Upload error:', error);
-    await sendTelegramMessage(chatId, '❌ Failed to upload image. Please try again.');
-    userStates.delete(chatId);
+      
+    default:
+      console.log(`❓ Unknown step: ${state.step}`);
+      userStates.delete(chatId);
   }
 }
 
@@ -206,31 +268,38 @@ async function savePostToDatabase(postData, chatId) {
       image: postData.image,
       description: postData.description,
       link: postData.link,
-      category: postData.category,
+      category: postData.category || 'news',
       createdAt: new Date().toISOString(),
       views: 0,
       source: 'telegram_bot'
     };
     
-    await posts.insertOne(post);
+    console.log('📊 Saving post:', post.title);
+    const result = await posts.insertOne(post);
+    console.log('✅ Post saved with ID:', result.insertedId);
     
     await sendTelegramMessage(chatId,
-      `🎉 *Post Created Successfully!*\n\n` +
+      `🎉 *POST CREATED SUCCESSFULLY!*\n\n` +
       `*Title:* ${post.title}\n` +
-      `*Image:* ✅ Uploaded\n` +
-      `*Link:* ${post.link}\n\n` +
-      `Your post is now live on the website!`
+      `*Link:* ${post.link}\n` +
+      `*Category:* ${post.category}\n\n` +
+      `✅ Post is now live on your website!\n` +
+      `🔗 https://dramawallah.vercel.app`
     );
     
-    console.log('Post saved:', post.title);
-    
   } catch (error) {
-    console.error('Database error:', error);
-    await sendTelegramMessage(chatId, '❌ Error saving post to database.');
+    console.error('❌ Database error:', error);
+    await sendTelegramMessage(chatId,
+      '❌ *Error saving post!*\n\n' +
+      'Please check:\n' +
+      '1. MongoDB connection\n' +
+      '2. Environment variables\n' +
+      '3. Try again later'
+    );
   }
 }
 
-// List posts
+// List all posts
 async function listPosts(chatId) {
   try {
     const db = await connectDB();
@@ -238,46 +307,50 @@ async function listPosts(chatId) {
     const allPosts = await posts.find({}).sort({ createdAt: -1 }).toArray();
     
     if (allPosts.length === 0) {
-      await sendTelegramMessage(chatId, '📭 No posts found.');
+      await sendTelegramMessage(chatId, '📭 *No posts found.*\n\nAdd your first post with /addpost');
       return;
     }
     
-    let message = `📋 *Total Posts: ${allPosts.length}*\n\n`;
+    let message = `📋 *TOTAL POSTS: ${allPosts.length}*\n\n`;
     
     allPosts.forEach((post, index) => {
       const date = new Date(post.createdAt).toLocaleDateString();
       message += `${index + 1}. *${post.title}*\n`;
-      message += `   📅 ${date}\n`;
+      message += `   📅 ${date} | 📂 ${post.category}\n`;
       message += `   🔗 ${post.link}\n\n`;
     });
     
     await sendTelegramMessage(chatId, message);
     
   } catch (error) {
-    console.error('Error:', error);
-    await sendTelegramMessage(chatId, '❌ Error fetching posts.');
+    console.error('❌ Error listing posts:', error);
+    await sendTelegramMessage(chatId, '❌ Error fetching posts from database.');
   }
 }
 
 // Welcome message
-async function sendWelcome(chatId) {
+async function sendWelcomeMessage(chatId) {
   const welcome = `
-🤖 *Welcome to DramaBot!*
+🤖 *WELCOME TO DRAMABOT!*
 
-*With Image Upload Feature:*
+*I can help you manage your Dramawallah website.*
 
-1. */addpost* - Create new post with photo upload
-2. */list* - Show all posts
-3. */help* - Show help
+✅ *Commands:*
+/addpost - Create new post
+/list - Show all posts
+/help - Show help
+/test - Test bot connection
 
-*How to add a post:*
+✅ *How to add a post:*
 1. Send /addpost
 2. Send title
-3. **Upload photo** (directly in Telegram)
+3. Send image URL
 4. Send description
-5. Send link
+5. Send redirect link
 
-*No more image links needed!*
+✅ *Website:* https://dramawallah.vercel.app
+
+*Bot is connected and ready!* 🚀
   `;
   
   await sendTelegramMessage(chatId, welcome);
@@ -286,26 +359,29 @@ async function sendWelcome(chatId) {
 // Help message
 async function sendHelp(chatId) {
   const help = `
-📚 *DramaBot Help*
+📚 *DRAMABOT HELP*
 
-*Upload Photos Directly:*
-• Just send any photo when asked for image
-• Supports JPG, PNG, GIF
-• Auto-resized for website
+*Getting Started:*
+1. Use /addpost to create content
+2. Follow the step-by-step prompts
+3. Posts appear instantly on website
 
-*Commands:*
-/addpost - Create post with photo upload
-/list - View all posts
-/help - This message
+*Image URLs:*
+• https://images.unsplash.com/...
+• https://i.imgur.com/...
+• Any direct image link
 
 *Example Workflow:*
 1. /addpost
 2. "Winter Wardrobe Secrets"
-3. 📸 [Upload photo]
+3. "https://images.unsplash.com/photo-..."
 4. "Behind the scenes of winter costumes"
-5. "https://example.com/article"
+5. "https://yourblog.com/article"
 
-*Need help?* Contact support.
+*Need Help?*
+Check Vercel logs or contact support.
+
+*Bot Status:* ✅ Online
   `;
   
   await sendTelegramMessage(chatId, help);
