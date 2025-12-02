@@ -1,1 +1,1025 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dramawallah | Winter Edition</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Montserrat:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
+        :root {
+            --primary-color: #a8d0e6;
+            --secondary-color: #374785;
+            --accent-color: #f76c6c;
+            --text-color: #e8e8e8;
+            --background-dark: #0a0e29;
+            --glass-bg: rgba(30, 35, 70, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.2);
+            --glow-color: rgba(168, 208, 230, 0.7);
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            color: var(--text-color);
+            background-color: var(--background-dark);
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* Video Background */
+        .video-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+        }
+
+        .video-background video {
+            min-width: 100%;
+            min-height: 100%;
+            object-fit: cover;
+            filter: brightness(0.7);
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, rgba(10, 14, 41, 0.9), rgba(10, 14, 41, 0.6));
+        }
+
+        /* Header & Navigation */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 5%;
+            position: fixed;
+            width: 100%;
+            z-index: 100;
+            backdrop-filter: blur(8px);
+            background: var(--glass-bg);
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .logo {
+            font-family: 'Cinzel', serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--primary-color);
+            text-shadow: 0 0 10px var(--glow-color);
+        }
+
+        .logo span {
+            color: var(--accent-color);
+        }
+
+        nav ul {
+            display: flex;
+            list-style: none;
+        }
+
+        nav li {
+            margin-left: 2rem;
+        }
+
+        nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            font-variant: small-caps;
+            font-weight: 500;
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+            text-shadow: 0 0 5px var(--glow-color);
+        }
+
+        nav a:hover {
+            color: var(--primary-color);
+            text-shadow: 0 0 10px var(--glow-color);
+        }
+
+        .search-container {
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+
+        .search-box {
+            display: flex;
+            background: rgba(20, 25, 60, 0.7);
+            border-radius: 30px;
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--glass-border);
+            transition: all 0.3s ease;
+        }
+
+        .search-box:focus-within {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 10px var(--glow-color);
+        }
+
+        .search-input {
+            background: transparent;
+            border: none;
+            color: var(--text-color);
+            outline: none;
+            width: 0;
+            transition: width 0.3s ease;
+        }
+
+        .search-input.active {
+            width: 200px;
+            margin-right: 0.5rem;
+        }
+
+        .search-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-color);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .search-btn:hover {
+            color: var(--primary-color);
+        }
+
+        /* Main Content */
+        main {
+            padding-top: 80px;
+        }
+
+        section {
+            padding: 5rem 5%;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .section-title {
+            font-family: 'Cinzel', serif;
+            font-variant: small-caps;
+            font-size: 2.5rem;
+            margin-bottom: 3rem;
+            text-align: center;
+            color: var(--primary-color);
+            text-shadow: 0 0 15px var(--glow-color);
+            letter-spacing: 2px;
+        }
+
+        /* Glass Morphism Cards */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--glass-border);
+            border-radius: 15px;
+            padding: 1.5rem;
+            transition: all 0.4s ease;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .glass-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+            border-color: rgba(168, 208, 230, 0.4);
+        }
+
+        /* Posts Grid */
+        .posts-grid, .dramas-grid, .bot-posts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .post-card {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .post-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+        }
+
+        .post-title {
+            font-family: 'Cinzel', serif;
+            font-variant: small-caps;
+            font-size: 1.3rem;
+            margin-bottom: 0.5rem;
+            color: var(--primary-color);
+            text-shadow: 0 0 8px var(--glow-color);
+        }
+
+        .post-title a {
+            color: inherit;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .post-title a:hover {
+            color: var(--accent-color);
+            text-shadow: 0 0 10px rgba(247, 108, 108, 0.7);
+        }
+
+        .post-excerpt {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            line-height: 1.5;
+        }
+
+        /* Bot Posts Section */
+        .bot-posts-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .bot-post-card {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .bot-post-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            opacity: 0.9;
+            margin-bottom: 0.5rem;
+        }
+
+        .bot-post-tag {
+            background: rgba(247, 108, 108, 0.4);
+            color: var(--accent-color);
+            padding: 0.2rem 0.5rem;
+            border-radius: 10px;
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Search Results */
+        .search-results {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            width: 300px;
+            background: rgba(25, 30, 70, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            padding: 1rem;
+            margin-top: 0.5rem;
+            display: none;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .search-results.active {
+            display: block;
+        }
+
+        .search-result-item {
+            padding: 0.8rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-radius: 5px;
+        }
+
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+
+        .search-result-item:hover {
+            background: rgba(168, 208, 230, 0.2);
+        }
+
+        .search-result-title {
+            font-weight: 500;
+            margin-bottom: 0.3rem;
+            color: var(--text-color);
+        }
+
+        .search-result-type {
+            font-size: 0.7rem;
+            opacity: 0.9;
+            text-transform: uppercase;
+            color: var(--primary-color);
+        }
+
+        /* Snow Animation */
+        .snow-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .snowflake {
+            position: absolute;
+            top: -10px;
+            color: #fff;
+            font-size: 1rem;
+            opacity: 0.7;
+            animation: fall linear forwards;
+            text-shadow: 0 0 5px var(--glow-color);
+        }
+
+        @keyframes fall {
+            to {
+                transform: translateY(100vh);
+            }
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 2rem;
+            backdrop-filter: blur(8px);
+            background: var(--glass-bg);
+            border-top: 1px solid var(--glass-border);
+        }
+
+        .social-links {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .social-links a {
+            color: var(--text-color);
+            font-size: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .social-links a:hover {
+            color: var(--primary-color);
+            text-shadow: 0 0 10px var(--glow-color);
+        }
+
+        .copyright {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        /* Empty State Styles */
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-color);
+            opacity: 0.7;
+            grid-column: 1 / -1;
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            color: var(--primary-color);
+        }
+
+        .empty-state p {
+            font-size: 1.1rem;
+        }
+
+        /* Loading Spinner */
+        .loader {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: var(--primary-color);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Admin Badge */
+        .admin-badge {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--accent-color);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            z-index: 99;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: 0 5px 15px rgba(247, 108, 108, 0.5);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            header {
+                flex-direction: column;
+                padding: 1rem;
+            }
+
+            nav ul {
+                margin-top: 1rem;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            nav li {
+                margin: 0 0.5rem;
+            }
+
+            .section-title {
+                font-size: 2rem;
+            }
+
+            .posts-grid, .dramas-grid, .bot-posts-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .search-input.active {
+                width: 150px;
+            }
+
+            .search-results {
+                width: 250px;
+                right: -50px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            section {
+                padding: 3rem 5%;
+            }
+            
+            .section-title {
+                font-size: 1.5rem;
+            }
+            
+            .post-image {
+                height: 150px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Video Background -->
+    <div class="video-background">
+        <video autoplay muted loop id="bgVideo">
+            <source src="https://github.com/vivekkumarsingh103/moon/raw/refs/heads/main/background.mp4">
+        </video>
+        <div class="video-overlay"></div>
+    </div>
+
+    <!-- Snow Animation -->
+    <div class="snow-container" id="snowContainer"></div>
+
+    <!-- Header -->
+    <header>
+        <div class="logo">Drama<span>wallah</span></div>
+        <nav>
+            <ul>
+                <li><a href="#home">Home</a></li>
+                <li><a href="#ongoing">Ongoing</a></li>
+                <li><a href="#all-posts">All Posts</a></li>
+                <li><a href="#blog">Blog</a></li>
+            </ul>
+        </nav>
+        <div class="search-container">
+            <div class="search-box">
+                <input type="text" class="search-input" placeholder="Search dramas...">
+                <button class="search-btn" id="searchBtn">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+            <div class="search-results" id="searchResults">
+                <!-- Search results will be populated by JavaScript -->
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <!-- Home Section -->
+        <section id="home">
+            <h2 class="section-title">Latest Posts</h2>
+            <div class="posts-grid" id="latestPosts">
+                <div class="empty-state">
+                    <i class="fas fa-newspaper"></i>
+                    <p>Loading posts from database...</p>
+                    <div class="loader" style="margin-top: 1rem;"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Ongoing Section -->
+        <section id="ongoing">
+            <h2 class="section-title">Ongoing Dramas</h2>
+            <div class="dramas-grid" id="ongoingDramas">
+                <div class="empty-state">
+                    <i class="fas fa-film"></i>
+                    <p>No ongoing dramas at the moment.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- All Posts Section -->
+        <section id="all-posts">
+            <h2 class="section-title">All Posts</h2>
+            <div class="bot-posts-container">
+                <div class="bot-posts-grid" id="allPostsGrid">
+                    <div class="empty-state">
+                        <i class="fas fa-feather"></i>
+                        <p>Loading posts from database...</p>
+                        <div class="loader" style="margin-top: 1rem;"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Blog Section -->
+        <section id="blog">
+            <h2 class="section-title">Blog</h2>
+            <div class="blog-container" id="blogPosts">
+                <div class="empty-state">
+                    <i class="fas fa-blog"></i>
+                    <p>No blog posts published yet.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Admin Badge -->
+    <div class="admin-badge">
+        <i class="fas fa-robot"></i>
+        <span>Manage via Telegram Bot</span>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <div class="social-links">
+            <a href="#"><i class="fab fa-twitter"></i></a>
+            <a href="#"><i class="fab fa-instagram"></i></a>
+            <a href="#"><i class="fab fa-youtube"></i></a>
+            <a href="#"><i class="fab fa-tiktok"></i></a>
+        </div>
+        <div class="copyright">
+            &copy; 2024 Dramawallah. All posts managed via Telegram Bot.
+        </div>
+    </footer>
+
+    <script>
+        // ============ INITIALIZATION ============
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSnowflakes();
+            initializeSearch();
+            initializeNavigation();
+            loadPostsFromDatabase();
+            
+            // Auto-refresh posts every 30 seconds
+            setInterval(loadPostsFromDatabase, 30000);
+        });
+
+        // ============ SNOWFLAKES ANIMATION ============
+        function initializeSnowflakes() {
+            function createSnowflake() {
+                const snowflake = document.createElement('div');
+                snowflake.classList.add('snowflake');
+                snowflake.innerHTML = '❄';
+                snowflake.style.left = Math.random() * 100 + 'vw';
+                snowflake.style.animationDuration = Math.random() * 3 + 5 + 's';
+                snowflake.style.opacity = Math.random() * 0.5 + 0.3;
+                snowflake.style.fontSize = Math.random() * 10 + 10 + 'px';
+                
+                document.getElementById('snowContainer').appendChild(snowflake);
+                
+                setTimeout(() => {
+                    snowflake.remove();
+                }, 8000);
+            }
+            
+            // Create initial snowflakes
+            for (let i = 0; i < 30; i++) {
+                setTimeout(createSnowflake, i * 100);
+            }
+            
+            // Continue creating snowflakes
+            setInterval(createSnowflake, 150);
+        }
+
+        // ============ SEARCH FUNCTIONALITY ============
+        function initializeSearch() {
+            const searchBtn = document.getElementById('searchBtn');
+            const searchInput = document.querySelector('.search-input');
+            const searchResults = document.getElementById('searchResults');
+            
+            // Toggle search input
+            searchBtn.addEventListener('click', () => {
+                searchInput.classList.toggle('active');
+                if (searchInput.classList.contains('active')) {
+                    searchInput.focus();
+                } else {
+                    searchResults.classList.remove('active');
+                }
+            });
+            
+            // Handle search input
+            searchInput.addEventListener('input', debounce((e) => {
+                const query = e.target.value.toLowerCase().trim();
+                
+                if (query.length === 0) {
+                    searchResults.classList.remove('active');
+                    return;
+                }
+                
+                // Search in loaded posts
+                const posts = document.querySelectorAll('.bot-post-card, .post-card');
+                const results = Array.from(posts).filter(post => {
+                    const title = post.querySelector('.post-title')?.textContent.toLowerCase() || '';
+                    const excerpt = post.querySelector('.post-excerpt')?.textContent.toLowerCase() || '';
+                    return title.includes(query) || excerpt.includes(query);
+                });
+                
+                displaySearchResults(results, query);
+            }, 300));
+            
+            // Close search when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.search-container')) {
+                    searchResults.classList.remove('active');
+                }
+            });
+            
+            // Debounce function for search
+            function debounce(func, wait) {
+                let timeout;
+                return function executedFunction(...args) {
+                    const later = () => {
+                        clearTimeout(timeout);
+                        func(...args);
+                    };
+                    clearTimeout(timeout);
+                    timeout = setTimeout(later, wait);
+                };
+            }
+            
+            // Display search results
+            function displaySearchResults(results, query) {
+                searchResults.innerHTML = '';
+                
+                if (results.length === 0) {
+                    searchResults.innerHTML = `
+                        <div class="search-result-item">
+                            No results found for "${query}"
+                        </div>
+                    `;
+                } else {
+                    results.slice(0, 5).forEach(post => {
+                        const title = post.querySelector('.post-title').textContent;
+                        const excerpt = post.querySelector('.post-excerpt').textContent;
+                        const type = post.classList.contains('blog-post') ? 'Blog' : 'Post';
+                        
+                        const resultItem = document.createElement('div');
+                        resultItem.classList.add('search-result-item');
+                        resultItem.innerHTML = `
+                            <div class="search-result-title">${title}</div>
+                            <div class="search-result-type">${type}</div>
+                        `;
+                        
+                        resultItem.addEventListener('click', () => {
+                            searchInput.value = '';
+                            searchInput.classList.remove('active');
+                            searchResults.classList.remove('active');
+                            post.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            post.style.animation = 'none';
+                            setTimeout(() => {
+                                post.style.animation = 'pulse 0.5s';
+                            }, 10);
+                        });
+                        
+                        searchResults.appendChild(resultItem);
+                    });
+                }
+                
+                searchResults.classList.add('active');
+            }
+        }
+
+        // ============ SMOOTH NAVIGATION ============
+        function initializeNavigation() {
+            document.querySelectorAll('nav a').forEach(anchor => {
+                anchor.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const targetId = this.getAttribute('href');
+                    const targetSection = document.querySelector(targetId);
+                    
+                    window.scrollTo({
+                        top: targetSection.offsetTop - 80,
+                        behavior: 'smooth'
+                    });
+                    
+                    // Update active nav
+                    document.querySelectorAll('nav a').forEach(a => a.style.color = '');
+                    this.style.color = 'var(--primary-color)';
+                });
+            });
+        }
+
+        // ============ MONGODB POSTS LOADER ============
+        async function loadPostsFromDatabase() {
+            try {
+                console.log('📡 Loading posts from MongoDB...');
+                
+                // Try multiple endpoints for reliability
+                const endpoints = [
+                    '/api/posts',
+                    'https://dramawallah.vercel.app/api/posts',
+                    '/api/posts?t=' + Date.now() // Cache buster
+                ];
+                
+                let response;
+                let posts = [];
+                
+                for (const endpoint of endpoints) {
+                    try {
+                        response = await fetch(endpoint, {
+                            headers: {
+                                'Cache-Control': 'no-cache'
+                            }
+                        });
+                        
+                        if (response.ok) {
+                            posts = await response.json();
+                            console.log(`✅ Loaded ${posts.length} posts from ${endpoint}`);
+                            break;
+                        }
+                    } catch (error) {
+                        console.log(`⚠️ Failed ${endpoint}:`, error.message);
+                        continue;
+                    }
+                }
+                
+                if (!posts || posts.length === 0) {
+                    console.log('📭 No posts found in database');
+                    updateEmptyStates('No posts yet. Add posts via Telegram bot!');
+                    return;
+                }
+                
+                // Clear existing posts
+                clearAllPostSections();
+                
+                // Sort posts by date (newest first)
+                posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                
+                // Display posts
+                posts.forEach(post => {
+                    displayPostInSections(post);
+                });
+                
+                // Update counters
+                updatePostCounters(posts.length);
+                
+            } catch (error) {
+                console.error('❌ Error loading posts:', error);
+                updateEmptyStates('Error loading posts. Try refreshing.');
+            }
+        }
+
+        // ============ POST DISPLAY FUNCTIONS ============
+        function displayPostInSections(post) {
+            // Format date
+            const postDate = new Date(post.createdAt);
+            const formattedDate = postDate.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            });
+            
+            // Create post card HTML
+            const postHTML = `
+                <div class="glass-card bot-post-card" data-id="${post._id || post.id}" data-category="${post.category || 'general'}">
+                    <img src="${post.image}" 
+                         alt="${post.title}" 
+                         class="post-image"
+                         loading="lazy"
+                         onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1519681393784-d120267933ba?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'">
+                    
+                    <div class="bot-post-meta">
+                        <span class="bot-post-tag">${post.category || 'news'}</span>
+                        <span>${formattedDate}</span>
+                    </div>
+                    
+                    <h3 class="post-title">
+                        <a href="${post.link}" 
+                           target="_blank" 
+                           rel="noopener noreferrer"
+                           class="post-link">
+                            ${post.title}
+                        </a>
+                    </h3>
+                    
+                    <p class="post-excerpt">
+                        ${post.description ? post.description.substring(0, 150) + (post.description.length > 150 ? '...' : '') : 'No description available.'}
+                    </p>
+                </div>
+            `;
+            
+            // Add to "All Posts" section
+            const allPostsGrid = document.getElementById('allPostsGrid');
+            if (allPostsGrid) {
+                if (allPostsGrid.querySelector('.empty-state')) {
+                    allPostsGrid.innerHTML = '';
+                }
+                allPostsGrid.insertAdjacentHTML('beforeend', postHTML);
+            }
+            
+            // Add to "Latest Posts" (first 6 posts)
+            const latestPostsGrid = document.getElementById('latestPosts');
+            if (latestPostsGrid && document.querySelectorAll('#latestPosts .bot-post-card').length < 6) {
+                if (latestPostsGrid.querySelector('.empty-state')) {
+                    latestPostsGrid.innerHTML = '';
+                }
+                latestPostsGrid.insertAdjacentHTML('beforeend', postHTML);
+            }
+            
+            // Add to specific category sections
+            if (post.category === 'ongoing' || post.category === 'drama') {
+                const ongoingGrid = document.getElementById('ongoingDramas');
+                if (ongoingGrid) {
+                    if (ongoingGrid.querySelector('.empty-state')) {
+                        ongoingGrid.innerHTML = '';
+                    }
+                    ongoingGrid.insertAdjacentHTML('beforeend', postHTML);
+                }
+            }
+            
+            if (post.category === 'blog') {
+                const blogContainer = document.getElementById('blogPosts');
+                if (blogContainer) {
+                    if (blogContainer.querySelector('.empty-state')) {
+                        blogContainer.innerHTML = '';
+                    }
+                    
+                    // Create blog-style post
+                    const blogPostHTML = `
+                        <div class="glass-card blog-post" data-id="${post._id || post.id}">
+                            <h3 class="post-title">
+                                <a href="${post.link}" target="_blank" class="post-link">
+                                    ${post.title}
+                                </a>
+                            </h3>
+                            
+                            <div class="bot-post-meta">
+                                <span>${formattedDate}</span>
+                                <span class="bot-post-tag">Blog</span>
+                            </div>
+                            
+                            <img src="${post.image}" 
+                                 alt="${post.title}" 
+                                 style="width: 100%; height: 300px; object-fit: cover; border-radius: 10px; margin: 1rem 0;"
+                                 onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1519681393784-d120267933ba?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'">
+                            
+                            <div class="post-excerpt" style="font-size: 1rem; line-height: 1.8;">
+                                ${post.description || 'No content available.'}
+                                
+                                <p style="margin-top: 1rem;">
+                                    <a href="${post.link}" 
+                                       target="_blank" 
+                                       style="color: var(--accent-color); text-decoration: none; font-weight: 500;">
+                                        Read full article →
+                                    </a>
+                                </p>
+                            </div>
+                        </div>
+                    `;
+                    
+                    blogContainer.insertAdjacentHTML('beforeend', blogPostHTML);
+                }
+            }
+        }
+
+        // ============ HELPER FUNCTIONS ============
+        function clearAllPostSections() {
+            // Don't clear on first load, only clear specific sections
+            if (!window.postsLoaded) {
+                window.postsLoaded = true;
+                return;
+            }
+            
+            // Clear only if we have new posts to show
+            const sections = ['allPostsGrid', 'latestPosts', 'ongoingDramas'];
+            sections.forEach(sectionId => {
+                const section = document.getElementById(sectionId);
+                if (section && !section.querySelector('.empty-state')) {
+                    section.innerHTML = '';
+                }
+            });
+        }
+
+        function updateEmptyStates(message) {
+            const emptyStates = document.querySelectorAll('.empty-state');
+            emptyStates.forEach(state => {
+                if (state.parentElement.children.length === 1) {
+                    state.innerHTML = `
+                        <i class="fas fa-database"></i>
+                        <p>${message || 'No posts available'}</p>
+                    `;
+                }
+            });
+        }
+
+        function updatePostCounters(count) {
+            // Update page title with count
+            if (count > 0) {
+                document.title = `Dramawallah | ${count} Posts`;
+            }
+            
+            // Add badge to admin indicator
+            const adminBadge = document.querySelector('.admin-badge');
+            if (adminBadge && count > 0) {
+                adminBadge.innerHTML = `
+                    <i class="fas fa-robot"></i>
+                    <span>${count} Posts via Telegram</span>
+                `;
+            }
+        }
+
+        // ============ IMAGE LAZY LOADING ============
+        function initializeLazyLoading() {
+            const images = document.querySelectorAll('img[loading="lazy"]');
+            
+            const imageObserver = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        img.src = img.dataset.src || img.src;
+                        img.classList.add('loaded');
+                        observer.unobserve(img);
+                    }
+                });
+            });
+            
+            images.forEach(img => imageObserver.observe(img));
+        }
+
+        // ============ ERROR HANDLING ============
+        function handleImageError(img) {
+            img.onerror = null;
+            img.src = 'https://images.unsplash.com/photo-1519681393784-d120267933ba?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80';
+            img.alt = 'Default drama image';
+        }
+
+        // ============ INITIAL LOAD ============
+        // Load posts immediately and then every 30 seconds
+        loadPostsFromDatabase();
+        setInterval(loadPostsFromDatabase, 30000);
+        
+        // Add pulse animation for new posts
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse {
+                0% { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); }
+                50% { box-shadow: 0 8px 32px rgba(168, 208, 230, 0.5); }
+                100% { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); }
+            }
+            
+            .new-post {
+                animation: pulse 2s ease-in-out;
+            }
+            
+            img.loaded {
+                opacity: 1;
+                transition: opacity 0.3s ease;
+            }
+            
+            img:not(.loaded) {
+                opacity: 0;
+            }
+        `;
+        document.head.appendChild(style);
+
+    </script>
+</body>
+</html>
